@@ -100,7 +100,7 @@ jobs:
   publish-reports:
     name: Publish Reports
     needs: [ test, vrt-update, vrt-compare ]
-    if: always()
+    if: always() && github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
       pages: write
