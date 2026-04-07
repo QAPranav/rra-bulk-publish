@@ -1,0 +1,25 @@
+{
+  "name": "rra-bulk-publish",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "bddge": "npx bddgen",
+    "test-links": "npm run bddge && cross-env REPORT_DIR=reports/links npx playwright test --grep @links --project=chromium",
+    "vrt-update": "npm run bddge && cross-env REPORT_DIR=reports/vrt npx playwright test --grep @vrt --update-snapshots --project=update-snapshots",
+    "vrt-test": "npm run bddge && cross-env REPORT_DIR=reports/vrt npx playwright test --grep @vrt --project=chromium",
+    "a11y-test": "npm run bddge && cross-env REPORT_DIR=reports/a11y npx playwright test --grep @a11y --project=chromium",
+    "redirect-test": "npm run bddge && cross-env REPORT_DIR=reports/redirects npx playwright test --grep @redirects --project=chromium"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "@axe-core/playwright": "^4.11.1",
+    "@playwright/test": "^1.58.2",
+    "@types/node": "^25.5.2",
+    "cross-env": "^10.1.0",
+    "playwright-bdd": "^8.5.0"
+  }
+}
