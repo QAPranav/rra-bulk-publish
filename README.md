@@ -28,7 +28,7 @@ rra-bulk-publish/
 │   │   ├── redirect.feature           # 301 redirect chain validation
 │   │   ├── seo.feature                # SEO metadata validation
 │   │   ├── sitemap.feature            # Sitemap inclusion/exclusion checks
-│   │   └── vrt.feature                # Visual regression testing (desktop & mobile)
+│   │   └── vrt.feature                # Visual regression testing
 │   ├── steps/                         # Step definition files (TypeScript)
 │   │   ├── accessibility.steps.ts
 │   │   ├── common.steps.ts
@@ -44,21 +44,20 @@ rra-bulk-publish/
 │   └── utils/
 │       ├── csv-loader.ts              # Parses redirect CSV data
 │       └── storage.setup.ts           # Cookie consent setup
-├── .features-gen/                     # Auto-generated specs (do not edit)
-├── screenshots/                       # VRT baseline snapshots
-├── reports/                           # Per-suite HTML reports
-├── test-results/                      # Playwright test artifacts
-├── playwright-report/                 # Default HTML report output
 ├── playwright.config.ts               # Playwright & BDD configuration
 ├── tsconfig.json                      # TypeScript config
 ├── package.json
+├── package-lock.json
 ├── storageState.json                  # Persisted browser cookie state
 ├── RRA - Redirects Sample(DAT).csv    # Redirect mapping data
 ├── allsite.txt                        # Full site URL list
 ├── england-urls.txt                   # England-specific URLs
 ├── professional-urls.txt              # Professional/staff URLs
-├── pro-urls-*.txt                     # Category-scoped URL subsets
-└── rra-topic-urls.txt                 # Topic-grouped URLs
+├── pro-urls-eviction.txt              # Eviction category URLs
+├── pro-urls-private-renting.txt       # Private renting category URLs
+├── pro-urls-repossession.txt          # Repossession category URLs
+├── pro-urls-tenancy-deposit.txt       # Tenancy deposit category URLs
+└── rra-topic-urls.txt                 # Topic-grouped RRA URLs
 ```
 
 ---
@@ -90,7 +89,7 @@ npx playwright install --with-deps
 
 ## Running Tests
 
-All commands first run `bddgen` to regenerate specs from feature files.
+All npm commands first run `bddgen` to regenerate specs from feature files before executing tests.
 
 ### By Suite
 
@@ -104,7 +103,7 @@ npm run test-links
 # 301 redirects
 npm run redirect-test
 
-# Visual regression — capture baselines
+# Visual regression — capture baselines (against shelter-preview.azurewebsites.net)
 npm run vrt-update
 
 # Visual regression — compare against baselines
@@ -147,7 +146,7 @@ Default `BASE_URL` is `https://england.shelter.org.uk`.
 
 - Runs Axe-core on the `#main` region of each page
 - Checks against `wcag2a`, `wcag2aa`, and `best-practice` rules
-- Tests both **desktop** (1280×720) and **mobile** (390×844) viewports
+- Tests **desktop** (Desktop Chrome) viewport
 - On failure: captures screenshot and detailed violation JSON per page
 - Soft-fail pattern — all pages run even if earlier ones fail
 
@@ -196,8 +195,9 @@ Default `BASE_URL` is `https://england.shelter.org.uk`.
 
 ### Visual Regression (`@vrt`)
 
-- Captures full-page screenshots for each URL at **desktop** (1280×720) and **mobile** (390×844)
-- Compares against baselines stored in `./screenshots/`
+- Captures full-page screenshots for each URL using **Desktop Chrome**
+- Baselines are captured against `https://shelter-preview.azurewebsites.net` (via `npm run vrt-update`)
+- Comparisons run against the production `BASE_URL`
 - Masks dynamic content regions and the Contentful editor button
 - Pixel tolerance: 20% (`maxDiffPixelRatio: 0.2`)
 - Run `npm run vrt-update` to update baselines; `npm run vrt-test` to compare
@@ -211,7 +211,10 @@ Default `BASE_URL` is `https://england.shelter.org.uk`.
 | `allsite.txt` | Full site URL inventory |
 | `england-urls.txt` | England-region pages |
 | `professional-urls.txt` | Professional/staff pages |
-| `pro-urls-*.txt` | Category subsets (eviction, repossession, etc.) |
+| `pro-urls-eviction.txt` | Eviction category URLs |
+| `pro-urls-private-renting.txt` | Private renting category URLs |
+| `pro-urls-repossession.txt` | Repossession category URLs |
+| `pro-urls-tenancy-deposit.txt` | Tenancy deposit category URLs |
 | `rra-topic-urls.txt` | Topic-grouped RRA URLs |
 
 ---
@@ -225,13 +228,14 @@ Key settings in `playwright.config.ts`:
 | Base URL | `https://england.shelter.org.uk` (or `BASE_URL` env) |
 | Features | `tests/features/**/*.feature` |
 | Steps | `tests/steps/**/*.ts`, `tests/fixtures/**/*.ts` |
-| Screenshots | `./screenshots` |
+| Snapshots | `./screenshots` |
 | Retries | 2 on CI, 0 locally |
 | Workers | 1 on CI, auto locally |
 | Parallel | Fully parallel |
 | Browsers | Chromium (Desktop Chrome) |
-| Reporter | HTML (per suite via `REPORT_DIR`) + list |
+| Reporter | HTML (`reports/html` or `REPORT_DIR` env) + list |
 | Setup project | Cookie consent acceptance → `storageState.json` |
+| VRT snapshot project | `update-snapshots` — uses `shelter-preview.azurewebsites.net` |
 
 ---
 
@@ -249,7 +253,7 @@ All test projects use this state, so cookie banners do not interfere with tests.
 
 ## Reports
 
-Reports are output to per-suite directories:
+Reports are output to per-suite directories (set via `REPORT_DIR` env):
 
 | Suite | Report Directory |
 |---|---|
@@ -257,7 +261,7 @@ Reports are output to per-suite directories:
 | Links | `reports/links/` |
 | Redirects | `reports/redirects/` |
 | Visual regression | `reports/vrt/` |
-| Default (all) | `playwright-report/` |
+| Default (all tests) | `reports/html/` |
 
 Open the HTML report:
 
@@ -276,7 +280,7 @@ GitHub Actions workflow at `.github/workflows/playwright.yml`:
 - **OS:** `ubuntu-latest`
 - **Node:** LTS
 - **Steps:** checkout → install Node → `npm ci` → `npx playwright install --with-deps` → `npx playwright test`
-- **Artifacts:** `playwright-report/` uploaded with 30-day retention
+- **Artifacts:** `playwright-report/` uploaded with 30-day retention (if not cancelled)
 
 ---
 
