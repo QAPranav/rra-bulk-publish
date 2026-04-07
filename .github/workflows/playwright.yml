@@ -25,14 +25,6 @@ jobs:
             script: test-links
             artifact: links-report
             path: reports/links/
-          - name: VRT — Update Baselines
-            script: vrt-update
-            artifact: vrt-update-report
-            path: reports/vrt/
-          - name: VRT — Compare
-            script: vrt-test
-            artifact: vrt-test-report
-            path: reports/vrt/
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -53,10 +45,61 @@ jobs:
           path: ${{ matrix.path }}
           retention-days: 7
 
+  # ─── VRT — Update Baselines ───────────────────────────────────────────────────
+  vrt-update:
+    name: VRT — Update Baselines
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+      - name: Install dependencies
+        run: npm ci
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+      - name: Run VRT — Update Baselines
+        run: npm run vrt-update
+        continue-on-error: true
+      - name: Upload report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: vrt-update-report
+          path: reports/vrt/
+          retention-days: 7
+
+  # ─── VRT — Compare (must run after update) ───────────────────────────────────
+  vrt-compare:
+    name: VRT — Compare
+    needs: [ vrt-update ]
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+      - name: Install dependencies
+        run: npm ci
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+      - name: Run VRT — Compare
+        run: npm run vrt-test
+        continue-on-error: true
+      - name: Upload report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: vrt-test-report
+          path: reports/vrt/
+          retention-days: 7
+
   # ─── Publish all reports to GitHub Pages ─────────────────────────────────────
   publish-reports:
     name: Publish Reports
-    needs: [ test ]
+    needs: [ test, vrt-update, vrt-compare ]
     if: always()
     runs-on: ubuntu-latest
     permissions:
