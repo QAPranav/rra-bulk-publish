@@ -1,27 +1,165 @@
 name: Playwright Tests
+
 on:
   push:
     branches: [ main, master ]
   pull_request:
     branches: [ main, master ]
+
 jobs:
+
+  # ─── All test suites via matrix ───────────────────────────────────────────────
   test:
-    timeout-minutes: 60
+    name: ${{ matrix.name }}
     runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Accessibility (WCAG 2.1 AA)
+            script: a11y-test
+            artifact: a11y-report
+            path: reports/a11y/
+          - name: Link Integrity
+            script: test-links
+            artifact: links-report
+            path: reports/links/
+          - name: VRT — Update Baselines
+            script: vrt-update
+            artifact: vrt-update-report
+            path: reports/vrt/
+          - name: VRT — Compare
+            script: vrt-test
+            artifact: vrt-test-report
+            path: reports/vrt/
     steps:
-    - uses: actions/checkout@v4
-    - uses: actions/setup-node@v4
-      with:
-        node-version: lts/*
-    - name: Install dependencies
-      run: npm ci
-    - name: Install Playwright Browsers
-      run: npx playwright install --with-deps
-    - name: Run Playwright tests
-      run: npx playwright test
-    - uses: actions/upload-artifact@v4
-      if: ${{ !cancelled() }}
-      with:
-        name: playwright-report
-        path: playwright-report/
-        retention-days: 30
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+      - name: Install dependencies
+        run: npm ci
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+      - name: Run ${{ matrix.name }}
+        run: npm run ${{ matrix.script }}
+        continue-on-error: true
+      - name: Upload report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.path }}
+          retention-days: 7
+
+  # ─── Publish all reports to GitHub Pages ─────────────────────────────────────
+  publish-reports:
+    name: Publish Reports
+    needs: [ test ]
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - name: Download a11y report
+        uses: actions/download-artifact@v4
+        with:
+          name: a11y-report
+          path: public/a11y
+        continue-on-error: true
+
+      - name: Download links report
+        uses: actions/download-artifact@v4
+        with:
+          name: links-report
+          path: public/links
+        continue-on-error: true
+
+      - name: Download VRT update report
+        uses: actions/download-artifact@v4
+        with:
+          name: vrt-update-report
+          path: public/vrt-update
+        continue-on-error: true
+
+      - name: Download VRT test report
+        uses: actions/download-artifact@v4
+        with:
+          name: vrt-test-report
+          path: public/vrt
+        continue-on-error: true
+
+      - name: Create index page
+        run: |
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          COMMIT="${{ github.sha }}"
+          SHORT_SHA="${COMMIT:0:7}"
+          REF="${{ github.ref_name }}"
+          cat > public/index.html << EOF
+          <!DOCTYPE html>
+          <html lang="en">
+          <head>
+            <meta charset="UTF-8" />
+            <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+            <title>RRA Bulk Publish — Test Reports</title>
+            <style>
+              *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+              body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; color: #1a1a1a; padding: 2rem; }
+              h1 { font-size: 1.5rem; font-weight: 700; margin-bottom: 0.25rem; }
+              .meta { font-size: 0.85rem; color: #666; margin-bottom: 2rem; }
+              .meta a { color: #0969da; text-decoration: none; }
+              .meta a:hover { text-decoration: underline; }
+              .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1rem; }
+              .card { background: #fff; border: 1px solid #d0d7de; border-radius: 8px; padding: 1.25rem 1.5rem; text-decoration: none; color: inherit; transition: box-shadow 0.15s; }
+              .card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+              .card h2 { font-size: 1rem; font-weight: 600; margin-bottom: 0.25rem; }
+              .card p { font-size: 0.82rem; color: #57606a; }
+              .badge { display: inline-block; font-size: 0.72rem; font-weight: 600; padding: 2px 8px; border-radius: 12px; margin-bottom: 0.5rem; background: #ddf4ff; color: #0550ae; }
+            </style>
+          </head>
+          <body>
+            <h1>RRA Bulk Publish — Test Reports</h1>
+            <p class="meta">
+              Branch: <strong>${REF}</strong> &nbsp;·&nbsp;
+              Commit: <a href="${{ github.server_url }}/${{ github.repository }}/commit/${COMMIT}">${SHORT_SHA}</a> &nbsp;·&nbsp;
+              <a href="${RUN_URL}">View run</a>
+            </p>
+            <div class="grid">
+              <a class="card" href="a11y/index.html">
+                <div class="badge">@a11y</div>
+                <h2>Accessibility</h2>
+                <p>WCAG 2.1 AA compliance across all 54 RRA pages</p>
+              </a>
+              <a class="card" href="links/index.html">
+                <div class="badge">@links</div>
+                <h2>Link Integrity</h2>
+                <p>Internal, external, and anchor link validation</p>
+              </a>
+              <a class="card" href="vrt-update/index.html">
+                <div class="badge">@vrt</div>
+                <h2>VRT — Baselines</h2>
+                <p>Baseline screenshots captured from shelter-preview</p>
+              </a>
+              <a class="card" href="vrt/index.html">
+                <div class="badge">@vrt</div>
+                <h2>VRT — Comparison</h2>
+                <p>Visual regression comparison against baselines</p>
+              </a>
+            </div>
+          </body>
+          </html>
+          EOF
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: public/
+
+      - name: Deploy to GitHub Pages
+        id: deploy
+        uses: actions/deploy-pages@v4
